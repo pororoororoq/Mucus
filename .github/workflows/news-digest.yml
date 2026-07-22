@@ -1,0 +1,68 @@
+name: Korean News Digest
+
+on:
+  schedule:
+    # 22:00 UTC = 07:00 KST, every day.
+    # NOTE: GitHub only runs scheduled workflows from the DEFAULT branch,
+    # so this cron fires once this file is merged into main.
+    - cron: "0 22 * * *"
+  workflow_dispatch:
+    inputs:
+      recency:
+        description: "Recency window (e.g. 1d, 2d, 12h)"
+        required: false
+        default: "1d"
+      enrich:
+        description: "Fetch article summaries (1) or headlines only (0)"
+        required: false
+        default: "1"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: news-digest
+  cancel-in-progress: false
+
+jobs:
+  build-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r news_digest/requirements.txt
+
+      - name: Build digest
+        env:
+          RECENCY: ${{ github.event.inputs.recency || '1d' }}
+          ENRICH: ${{ github.event.inputs.enrich || '1' }}
+          # Optional Naver Search API cross-check (safe to leave unset).
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+        run: python -m news_digest.main
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: news-digest
+          path: digests/*.md
+          if-no-files-found: warn
+
+      - name: Commit digest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add digests/
+          if git diff --staged --quiet; then
+            echo "No digest changes to commit."
+          else
+            git commit -m "chore: add news digest for $(TZ=Asia/Seoul date +%Y-%m-%d)"
+            git push
+          fi
