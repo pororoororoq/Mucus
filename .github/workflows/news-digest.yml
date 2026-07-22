@@ -1,10 +1,6 @@
 name: Korean News Digest
 
 on:
-  # TEMPORARY: validate the broadcast digest on this branch before merge.
-  push:
-    branches: [claude/korean-news-digest-naver-y7p4ch]
-    paths: ["news_digest/**", ".github/workflows/news-digest.yml"]
   schedule:
     # 22:00 UTC = 07:00 KST, every day.
     # NOTE: GitHub only runs scheduled workflows from the DEFAULT branch,
