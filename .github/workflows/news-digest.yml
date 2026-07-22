@@ -72,11 +72,13 @@ jobs:
           {
             echo 'html<<DIGEST_EOF'
             cat digests/latest.html
+            echo ""
             echo DIGEST_EOF
           } >> "$GITHUB_OUTPUT"
           {
             echo 'broadcast<<DIGEST_EOF'
             cat digests/broadcast-latest.html
+            echo ""
             echo DIGEST_EOF
           } >> "$GITHUB_OUTPUT"
           echo "date=$(TZ=Asia/Seoul date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"

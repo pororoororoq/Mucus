@@ -186,7 +186,7 @@ def render_broadcast_html(data: dict[str, list[Article]], now: datetime) -> str:
         )
     parts.append(f'<div class="ft">생성 시각 {esc(date_str)}</div>')
     parts.append("</div></body></html>")
-    return "\n".join(parts)
+    return "\n".join(parts) + "\n"
 
 
 def main() -> int:
