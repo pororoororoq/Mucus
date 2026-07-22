@@ -27,6 +27,15 @@ concurrency:
 jobs:
   build-digest:
     runs-on: ubuntu-latest
+    env:
+      # Email delivery is optional. Add these two repo secrets to enable it:
+      #   MAIL_USERNAME = the Gmail address that sends (e.g. you@gmail.com)
+      #   MAIL_PASSWORD = a Gmail App Password (16 chars, requires 2FA)
+      # Without them, the email step is skipped and the digest is still
+      # committed + uploaded as an artifact.
+      MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+      MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+      DIGEST_TO: jakekim070917@gmail.com
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,6 +56,31 @@ jobs:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: python -m news_digest.main
+
+      - name: Prepare email body
+        id: body
+        run: |
+          {
+            echo 'content<<DIGEST_EOF'
+            cat digests/latest.md
+            echo DIGEST_EOF
+          } >> "$GITHUB_OUTPUT"
+          echo "date=$(TZ=Asia/Seoul date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Send email
+        if: ${{ env.MAIL_USERNAME != '' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ env.MAIL_USERNAME }}
+          password: ${{ env.MAIL_PASSWORD }}
+          from: Korean News Digest <${{ env.MAIL_USERNAME }}>
+          to: ${{ env.DIGEST_TO }}
+          subject: "📰 오늘의 한국 뉴스 다이제스트 — ${{ steps.body.outputs.date }}"
+          body: ${{ steps.body.outputs.content }}
+          attachments: digests/latest.md
 
       - name: Upload digest artifact
         uses: actions/upload-artifact@v4

@@ -47,6 +47,21 @@ python -m news_digest.main          # 리포지토리 루트에서
 | `RECENCY` | `1d` | 수집 범위 (`2d`, `12h` 등) |
 | `OUTPUT_DIR` | `<repo>/digests` | 출력 폴더 |
 
+## 이메일 발송 (jakekim070917@gmail.com)
+
+다이제스트를 이메일로도 받으려면 GitHub 리포 **Settings → Secrets and variables → Actions** 에
+아래 2개를 추가하세요. (미설정 시 이메일 단계는 자동으로 건너뛰고, 커밋·아티팩트는 정상 동작)
+
+| 시크릿 | 값 |
+|---|---|
+| `MAIL_USERNAME` | 발송용 Gmail 주소 (예: `you@gmail.com`) |
+| `MAIL_PASSWORD` | Gmail **앱 비밀번호**(16자리) — 2단계 인증 필요, 일반 비번 아님 |
+
+- 앱 비밀번호 발급: Google 계정 → 보안 → 2단계 인증 → **앱 비밀번호**.
+- 수신자는 워크플로에 `DIGEST_TO: jakekim070917@gmail.com` 로 지정돼 있습니다. 바꾸려면
+  `.github/workflows/news-digest.yml` 의 `DIGEST_TO` 값을 편집하세요.
+- 발송은 `smtp.gmail.com:465`(SSL)로 이뤄지며, 본문에 다이제스트 전문 + `latest.md` 첨부가 포함됩니다.
+
 ## (선택) 네이버 검색 API 추가
 
 1. https://developers.naver.com 에서 애플리케이션 등록 → **Client ID / Secret** 발급 (무료).
