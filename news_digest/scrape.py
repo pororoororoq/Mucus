@@ -35,7 +35,8 @@ def _get(url: str, timeout: int = 20) -> requests.Response:
 
 
 # --------------------------------------------------------------------------- SBS
-SBS_URL = "https://news.sbs.co.kr/news/programMain.do?prog_cd=RE"
+# prog_cd=R1 (8뉴스) serves the rundown in static HTML; prog_cd=RE is JS-rendered.
+SBS_URL = "https://news.sbs.co.kr/news/programMain.do?prog_cd=R1"
 
 
 def scrape_sbs(limit: int = 20) -> list[Article]:
@@ -43,24 +44,24 @@ def scrape_sbs(limit: int = 20) -> list[Article]:
     out: list[Article] = []
     seen: set[str] = set()
     for a in soup.find_all("a", href=True):
-        if "endPage.do" not in a["href"]:
+        href = a["href"]
+        if "endPage.do" not in href or "SBSNEWSPROGRAM" not in href:
             continue
-        text = re.sub(r"\s+", " ", a.get_text(" ", strip=True))
-        if not text.startswith("동영상 기사"):
-            continue
-        text = text[len("동영상 기사"):].strip()
-        # strip leading clip duration mm:ss
-        text = re.sub(r"^\d{1,2}:\d{2}\s*", "", text)
+        # Title/section live in <p class="desc"><strong><em class="cate">섹션</em>제목
         section = ""
-        m = _SECTION_RE.match(text)
-        if m:
-            section = m.group(1)
-            text = text[m.end():]
-        title = text.strip()
-        if len(title) < 5 or title in seen:
+        title = ""
+        strong = a.find("strong")
+        if strong:
+            cate = strong.find("em")
+            if cate:
+                section = cate.get_text(strip=True)
+                cate.extract()
+            title = re.sub(r"\s+", " ", strong.get_text(" ", strip=True))
+        if len(title) < 5:
+            continue
+        if title in seen:
             continue
         seen.add(title)
-        href = a["href"]
         link = "https://news.sbs.co.kr" + href if href.startswith("/") else href
         art = Article(title=title, link=link, source="SBS 8뉴스")
         art.section = section
@@ -77,14 +78,27 @@ KBS_API = (
     "https://news.kbs.co.kr/api/getNewsList"
     "?currentPageNo=1&rowsPerPage=100&exceptPhotoYn=N"
 )
-KBS_NEWS9 = "0001"
+_KBS_NEWS9_RE = re.compile(r"뉴스\s*9")
+
+
+def _kbs_order(d: dict) -> int:
+    for key in ("broadOrder", "orderSeq", "listNum"):
+        v = d.get(key)
+        if v not in (None, ""):
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                pass
+    return 9999
 
 
 def scrape_kbs(limit: int = 20) -> list[Article]:
     data = _get(KBS_API).json().get("data", [])
-    items = [d for d in data if d.get("contentsCode") == KBS_NEWS9]
-    # deskTime ascending ≈ on-air order (lead story first)
-    items.sort(key=lambda d: d.get("deskTime", ""))
+    # broadName identifies the program (e.g. "뉴스 9"); broadOrder is the rundown slot.
+    items = [d for d in data if _KBS_NEWS9_RE.search(d.get("broadName") or "")]
+    # Drop regional-edition closings / duplicate closings, keep national rundown.
+    items = [d for d in items if "클로징" not in (d.get("newsTitle") or "")]
+    items.sort(key=_kbs_order)
     out: list[Article] = []
     seen: set[str] = set()
     for d in items:
