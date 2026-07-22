@@ -61,8 +61,8 @@ jobs:
         id: body
         run: |
           {
-            echo 'content<<DIGEST_EOF'
-            cat digests/latest.md
+            echo 'html<<DIGEST_EOF'
+            cat digests/latest.html
             echo DIGEST_EOF
           } >> "$GITHUB_OUTPUT"
           echo "date=$(TZ=Asia/Seoul date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
@@ -79,14 +79,14 @@ jobs:
           from: Korean News Digest <${{ env.MAIL_USERNAME }}>
           to: ${{ env.DIGEST_TO }}
           subject: "📰 오늘의 한국 뉴스 다이제스트 — ${{ steps.body.outputs.date }}"
-          body: ${{ steps.body.outputs.content }}
-          attachments: digests/latest.md
+          html_body: ${{ steps.body.outputs.html }}
+          attachments: digests/latest.html
 
       - name: Upload digest artifact
         uses: actions/upload-artifact@v4
         with:
           name: news-digest
-          path: digests/*.md
+          path: digests/*.html
           if-no-files-found: warn
 
       - name: Commit digest
