@@ -74,11 +74,9 @@ def scrape_sbs(limit: int = 20) -> list[Article]:
 
 
 # --------------------------------------------------------------------------- KBS
-KBS_API = (
-    "https://news.kbs.co.kr/api/getNewsList"
-    "?currentPageNo=1&rowsPerPage=100&exceptPhotoYn=N"
-)
-_KBS_NEWS9_RE = re.compile(r"뉴스\s*9")
+KBS_API = "https://news.kbs.co.kr/api/getNewsList?currentPageNo={page}&rowsPerPage=100&exceptPhotoYn=N"
+# National 뉴스9 program name is exactly "뉴스 9"; regional editions are "뉴스9(광주)" etc.
+KBS_NATIONAL = "뉴스 9"
 
 
 def _kbs_order(d: dict) -> int:
@@ -93,20 +91,33 @@ def _kbs_order(d: dict) -> int:
 
 
 def scrape_kbs(limit: int = 20) -> list[Article]:
-    data = _get(KBS_API).json().get("data", [])
-    # broadName identifies the program (e.g. "뉴스 9"); broadOrder is the rundown slot.
-    items = [d for d in data if _KBS_NEWS9_RE.search(d.get("broadName") or "")]
-    # Drop regional-edition closings / duplicate closings, keep national rundown.
-    items = [d for d in items if "클로징" not in (d.get("newsTitle") or "")]
-    items.sort(key=_kbs_order)
+    # The lead stories (rundown slots 1-19) are older than one 100-item page,
+    # so paginate to collect the full national rundown.
+    rows: list[dict] = []
+    for page in range(1, 5):
+        try:
+            data = _get(KBS_API.format(page=page)).json().get("data", [])
+        except Exception:  # noqa: BLE001
+            break
+        if not data:
+            break
+        rows.extend(data)
+
+    national = [
+        d for d in rows
+        if (d.get("broadName") or "") == KBS_NATIONAL
+        and "클로징" not in (d.get("newsTitle") or "")
+    ]
+    national.sort(key=_kbs_order)
+
     out: list[Article] = []
     seen: set[str] = set()
-    for d in items:
+    for d in national:
         title = (d.get("newsTitle") or "").strip()
         ncd = d.get("newsCode")
-        if not title or not ncd or title in seen:
+        if not title or not ncd or ncd in seen:
             continue
-        seen.add(title)
+        seen.add(ncd)
         link = f"https://news.kbs.co.kr/news/pc/view/view.do?ncd={ncd}"
         art = Article(title=title, link=link, source="KBS 뉴스9")
         art.published = d.get("serviceTime", "") or d.get("deskTime", "")

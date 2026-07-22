@@ -1,13 +1,13 @@
 """Build a daily *broadcast* news digest as a styled HTML page.
 
-Mirrors the newspaper digest, but organized by broadcaster (SBS·KBS·MBC·YTN)
-as an ordered, "방송 다시보기"-style rundown: each item shows a section chip,
-the headline (clickable), and the air/publish time.
+Organized by broadcaster (SBS·KBS·MBC·YTN) as an ordered "방송 다시보기"-style
+rundown: per-broadcaster header, numbered rows with headline (clickable) and,
+where available, a section chip + air time.
 
-Source is Google News RSS filtered per broadcaster domain (no API key). Note:
-this approximates the on-air rundown by newest-first ordering — Google News RSS
-does not expose the exact 8뉴스/뉴스데스크 running order or clip durations. A
-per-broadcaster "다시보기" scraper could be added later for the exact lineup.
+Ordering source:
+- SBS 8뉴스 / KBS 뉴스9 / MBC 뉴스데스크 → scraped from each broadcaster's page in
+  actual on-air order (see scrape.py).
+- YTN (and any scraper failure) → Google News RSS per domain, newest-first.
 
 Writes digests/broadcast-YYYY-MM-DD.html + digests/broadcast-latest.html.
 Run:  python -m news_digest.broadcast
@@ -15,93 +15,105 @@ Run:  python -m news_digest.broadcast
 
 from __future__ import annotations
 
+import html
 import os
-import sys
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 if __package__:
-    from . import sources
+    from . import scrape, sources
     from .fetch import Article, fetch_articles
     from .main import _format_time
-else:  # pragma: no cover - direct-run convenience
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+else:  # pragma: no cover
+    import scrape  # type: ignore
     import sources  # type: ignore
     from fetch import Article, fetch_articles  # type: ignore
     from main import _format_time  # type: ignore
 
 KST = ZoneInfo("Asia/Seoul")
 
-# Broadcaster display name -> Google News `site:` domain.
 BROADCASTERS = {
     "SBS": "news.sbs.co.kr",
     "KBS": "news.kbs.co.kr",
     "MBC": "imnews.imbc.com",
     "YTN": "ytn.co.kr",
 }
-
-# Brand-ish accent color per broadcaster.
+PROGRAM = {"SBS": "8뉴스", "KBS": "뉴스9", "MBC": "뉴스데스크", "YTN": "최신 뉴스"}
 BROADCASTER_COLORS = {
     "SBS": "#00a0e0",
     "KBS": "#e60012",
     "MBC": "#003da5",
     "YTN": "#e4002b",
 }
-
-# Sections to sweep (used both to filter and to tag each item with a chip).
 BROADCAST_SECTIONS = {
-    "정치": "정치",
-    "경제": "경제",
-    "사회": "사회",
-    "국제": "국제",
-    "문화": "문화",
-    "스포츠": "스포츠",
+    "정치": "정치", "경제": "경제", "사회": "사회",
+    "국제": "국제", "문화": "문화", "스포츠": "스포츠",
 }
-
 MAX_PER_SECTION = 5
-MAX_PER_BROADCASTER = 16
+MAX_PER_BROADCASTER = 22
 
 
 def _pub_key(article: Article) -> datetime:
-    """Sortable datetime for an article; unknown times sort oldest."""
     try:
         return parsedate_to_datetime(article.published)
     except Exception:  # noqa: BLE001
         return datetime.min.replace(tzinfo=timezone.utc)
 
 
-def collect_broadcast() -> dict[str, list[Article]]:
-    """Return {broadcaster: [Article, ...]} ordered newest-first."""
-    recency = os.environ.get("RECENCY", sources.RECENCY)
-    result: dict[str, list[Article]] = {}
+def _google_fallback(domain: str, recency: str) -> list[Article]:
+    """Newest-first per-broadcaster list from Google News (no on-air order)."""
+    collected: list[Article] = []
+    seen: set[str] = set()
+    for section, keyword in BROADCAST_SECTIONS.items():
+        for a in fetch_articles(domain, keyword, recency, MAX_PER_SECTION):
+            key = a.title.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            a.section = section
+            collected.append(a)
+    collected.sort(key=_pub_key, reverse=True)
+    return collected[:MAX_PER_BROADCASTER]
 
+
+def collect_broadcast() -> dict[str, tuple[list[Article], bool]]:
+    """Return {broadcaster: (items, is_rundown)}; is_rundown=True when scraped
+    in real on-air order, False for the Google News fallback."""
+    now = datetime.now(KST)
+    year = now.strftime("%Y")
+    recency = os.environ.get("RECENCY", sources.RECENCY)
+
+    scrapers = {
+        "SBS": lambda: scrape.scrape_sbs(MAX_PER_BROADCASTER),
+        "KBS": lambda: scrape.scrape_kbs(MAX_PER_BROADCASTER),
+        "MBC": lambda: scrape.scrape_mbc(year, MAX_PER_BROADCASTER),
+    }
+
+    result: dict[str, tuple[list[Article], bool]] = {}
     for name, domain in BROADCASTERS.items():
-        print(f"[{name}] fetching…")
-        collected: list[Article] = []
-        seen: set[str] = set()
-        for section, keyword in BROADCAST_SECTIONS.items():
-            for a in fetch_articles(domain, keyword, recency, MAX_PER_SECTION):
-                key = a.title.lower()
-                if key in seen:
-                    continue
-                seen.add(key)
-                a.paper = name
-                a.section = section
-                collected.append(a)
-        collected.sort(key=_pub_key, reverse=True)
-        result[name] = collected[:MAX_PER_BROADCASTER]
-        print(f"    {len(result[name])}건")
+        items: list[Article] = []
+        is_rundown = False
+        if name in scrapers:
+            try:
+                items = scrapers[name]()
+                is_rundown = True
+                print(f"[{name}] scraped rundown: {len(items)}건")
+            except Exception as err:  # noqa: BLE001
+                print(f"[{name}] scrape failed ({err}); Google News fallback")
+        if not items:
+            items = _google_fallback(domain, recency)
+            is_rundown = False
+            print(f"[{name}] fallback: {len(items)}건")
+        result[name] = (items, is_rundown)
     return result
 
 
-def render_broadcast_html(data: dict[str, list[Article]], now: datetime) -> str:
-    import html
-
+def render_broadcast_html(data: dict[str, tuple[list[Article], bool]], now: datetime) -> str:
     esc = html.escape
     date_str = now.strftime("%Y-%m-%d (%a) %H:%M KST")
-    total = sum(len(v) for v in data.values())
+    total = sum(len(v[0]) for v in data.values())
 
     parts: list[str] = []
     parts.append("<!DOCTYPE html>")
@@ -123,6 +135,9 @@ def render_broadcast_html(data: dict[str, list[Article]], now: datetime) -> str:
         "overflow:hidden;margin:0 0 20px;box-shadow:0 1px 2px rgba(15,23,42,.04);}"
         ".ch > h2{margin:0;padding:12px 18px;color:#fff;font-size:18px;font-weight:800;"
         "letter-spacing:.5px;}"
+        ".ch > h2 .prog{font-size:13px;font-weight:600;opacity:.9;margin-left:8px;}"
+        ".ch > h2 .tag{float:right;font-size:11px;font-weight:600;opacity:.85;"
+        "background:rgba(255,255,255,.22);border-radius:10px;padding:2px 9px;}"
         ".rundown{padding:6px 8px 12px;}"
         ".row{display:flex;align-items:flex-start;gap:10px;padding:9px 10px;"
         "border-bottom:1px solid #f4f6f9;}"
@@ -145,17 +160,23 @@ def render_broadcast_html(data: dict[str, list[Article]], now: datetime) -> str:
     parts.append('<div class="hd">')
     parts.append("<h1>📺 오늘의 방송 뉴스 다이제스트</h1>")
     parts.append(
-        f'<p class="sub">{esc(date_str)} · 총 {total}건 · 방송사별 최신순 · '
-        "Google 뉴스 RSS</p>"
+        f'<p class="sub">{esc(date_str)} · 총 {total}건 · '
+        "SBS·KBS·MBC는 방송 편성 순서, YTN은 최신순</p>"
     )
     parts.append("</div>")
 
-    for name, items in data.items():
+    for name, (items, is_rundown) in data.items():
         color = BROADCASTER_COLORS.get(name, "#334155")
+        tag = "편성 순서" if is_rundown else "최신순"
+        prog = PROGRAM.get(name, "")
         parts.append('<div class="ch">')
-        parts.append(f'<h2 style="background:{color};">{esc(name)}</h2>')
+        parts.append(
+            f'<h2 style="background:{color};">{esc(name)}'
+            f'<span class="prog">{esc(prog)}</span>'
+            f'<span class="tag">{tag}</span></h2>'
+        )
         if not items:
-            parts.append('<div class="empty">최근 24시간 내 수집된 기사가 없습니다.</div>')
+            parts.append('<div class="empty">최근 수집된 기사가 없습니다.</div>')
             parts.append("</div>")
             continue
         parts.append('<div class="rundown">')
@@ -163,7 +184,7 @@ def render_broadcast_html(data: dict[str, list[Article]], now: datetime) -> str:
             parts.append('<div class="row">')
             parts.append(f'<div class="num">{i}</div>')
             parts.append('<div class="body">')
-            chip = f'<span class="chip">{esc(a.section)}</span>' if a.section else ""
+            chip = f'<span class="chip">{esc(a.section)}</span>' if getattr(a, "section", "") else ""
             if a.link:
                 parts.append(
                     f'{chip}<a class="ttl" href="{esc(a.link)}" target="_blank" '
@@ -174,16 +195,10 @@ def render_broadcast_html(data: dict[str, list[Article]], now: datetime) -> str:
             meta_bits = [b for b in (a.source, _format_time(a.published)) if b]
             if meta_bits:
                 parts.append(f'<div class="meta">{esc(" · ".join(meta_bits))}</div>')
-            parts.append("</div>")  # .body
-            parts.append("</div>")  # .row
-        parts.append("</div>")  # .rundown
-        parts.append("</div>")  # .ch
+            parts.append("</div></div>")
+        parts.append("</div>")
+        parts.append("</div>")
 
-    if total == 0:
-        parts.append(
-            '<div class="empty">⚠️ 수집된 기사가 없습니다. '
-            "피드 URL 또는 네트워크 상태를 확인하세요.</div>"
-        )
     parts.append(f'<div class="ft">생성 시각 {esc(date_str)}</div>')
     parts.append("</div></body></html>")
     return "\n".join(parts) + "\n"
@@ -208,8 +223,9 @@ def main() -> int:
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
         lines = [f"### 📺 방송 뉴스 다이제스트 — {now.strftime('%Y-%m-%d %H:%M KST')}", ""]
-        for name, items in data.items():
-            lines.append(f"- **{name}** — {len(items)}건")
+        for name, (items, is_rundown) in data.items():
+            kind = "편성순서" if is_rundown else "최신순"
+            lines.append(f"- **{name}** ({PROGRAM.get(name,'')}, {kind}) — {len(items)}건")
         lines.append("")
         with open(summary_path, "a", encoding="utf-8") as fh:
             fh.write("\n".join(lines))
