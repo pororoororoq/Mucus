@@ -57,7 +57,12 @@ jobs:
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
         run: python -m news_digest.main
 
-      - name: Prepare email body
+      - name: Build broadcast digest
+        env:
+          RECENCY: ${{ github.event.inputs.recency || '1d' }}
+        run: python -m news_digest.broadcast
+
+      - name: Prepare email bodies
         id: body
         run: |
           {
@@ -65,9 +70,14 @@ jobs:
             cat digests/latest.html
             echo DIGEST_EOF
           } >> "$GITHUB_OUTPUT"
+          {
+            echo 'broadcast<<DIGEST_EOF'
+            cat digests/broadcast-latest.html
+            echo DIGEST_EOF
+          } >> "$GITHUB_OUTPUT"
           echo "date=$(TZ=Asia/Seoul date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
 
-      - name: Send email
+      - name: Send newspaper email
         if: ${{ env.MAIL_USERNAME != '' }}
         uses: dawidd6/action-send-mail@v3
         with:
@@ -81,6 +91,21 @@ jobs:
           subject: "📰 오늘의 한국 뉴스 다이제스트 — ${{ steps.body.outputs.date }}"
           html_body: ${{ steps.body.outputs.html }}
           attachments: digests/latest.html
+
+      - name: Send broadcast email
+        if: ${{ env.MAIL_USERNAME != '' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ env.MAIL_USERNAME }}
+          password: ${{ env.MAIL_PASSWORD }}
+          from: Korean News Digest <${{ env.MAIL_USERNAME }}>
+          to: ${{ env.DIGEST_TO }}
+          subject: "📺 오늘의 방송 뉴스 다이제스트 — ${{ steps.body.outputs.date }}"
+          html_body: ${{ steps.body.outputs.broadcast }}
+          attachments: digests/broadcast-latest.html
 
       - name: Upload digest artifact
         uses: actions/upload-artifact@v4

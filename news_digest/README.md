@@ -1,8 +1,10 @@
 # 📰 한국 뉴스 다이제스트 (Korean News Digest)
 
-조선·동아·중앙·한국·한겨레 등 주요 신문의 최근 기사를 **언론사·섹션별로 자동 수집·요약**해
-매일 아침 **스타일드 HTML 다이제스트**로 만들어 주는 GitHub Actions 워크플로입니다.
-(브라우저로 열어도, 이메일로 받아도 그대로 보기 좋게 렌더링됩니다.)
+주요 뉴스를 **자동 수집**해 매일 아침 **스타일드 HTML 다이제스트** 2종으로 만들어 주는
+GitHub Actions 워크플로입니다. (브라우저로 열어도, 이메일로 받아도 그대로 렌더링)
+
+1. **📰 신문 다이제스트** — 조선·동아·중앙·한국·한겨레를 **언론사·섹션별**로 정리.
+2. **📺 방송 다이제스트** — SBS·KBS·MBC·YTN을 **방송사별 최신순 '다시보기' 리스트**(순번·섹션칩·제목·링크)로 정리.
 
 ## 왜 이렇게 만들었나
 
@@ -36,8 +38,8 @@ Claude Code 웹 세션의 원격 환경은 조직 이그레스 정책으로 네�
 
 ```bash
 pip install -r news_digest/requirements.txt
-python -m news_digest.main          # 리포지토리 루트에서
-# 결과: digests/YYYY-MM-DD.html, digests/latest.html  (브라우저로 열어보세요)
+python -m news_digest.main          # 신문  → digests/YYYY-MM-DD.html, digests/latest.html
+python -m news_digest.broadcast     # 방송  → digests/broadcast-YYYY-MM-DD.html, digests/broadcast-latest.html
 ```
 
 환경 변수:
@@ -85,8 +87,9 @@ python -m news_digest.main          # 리포지토리 루트에서
 news_digest/
 ├─ sources.py     # 신문사·섹션·수집 설정
 ├─ fetch.py       # RSS 수집·파싱·요약 보강
-├─ main.py        # 다이제스트 생성 (digests/*.html 작성)
+├─ main.py        # 신문 다이제스트 생성 (digests/*.html)
+├─ broadcast.py   # 방송 다이제스트 생성 (digests/broadcast-*.html)
 ├─ naver_api.py   # (선택) 네이버 검색 API 헬퍼
 └─ requirements.txt
-.github/workflows/news-digest.yml   # 매일 07:00 KST 실행
+.github/workflows/news-digest.yml   # 매일 07:00 KST 실행 (신문+방송 모두)
 ```
