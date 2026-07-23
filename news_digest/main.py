@@ -115,7 +115,12 @@ def _meaningful_summary(article: Article) -> str:
     return summary
 
 
-def render_html(data: dict[str, dict[str, list[Article]]], now: datetime) -> str:
+def render_html(
+    data: dict[str, dict[str, list[Article]]],
+    now: datetime,
+    title: str = "📰 오늘의 한국 뉴스 다이제스트",
+    source_note: str = "Google 뉴스 RSS · 최근 24시간",
+) -> str:
     date_str = now.strftime("%Y-%m-%d (%a) %H:%M KST")
     total = sum(len(v) for ps in data.values() for v in ps.values())
     esc = html.escape
@@ -158,10 +163,9 @@ def render_html(data: dict[str, dict[str, list[Article]]], now: datetime) -> str
     parts.append('<div class="wrap">')
 
     parts.append('<div class="hd">')
-    parts.append("<h1>📰 오늘의 한국 뉴스 다이제스트</h1>")
+    parts.append(f"<h1>{esc(title)}</h1>")
     parts.append(
-        f'<p class="sub">{esc(date_str)} · 총 {total}건 · '
-        "Google 뉴스 RSS · 최근 24시간</p>"
+        f'<p class="sub">{esc(date_str)} · 총 {total}건 · {esc(source_note)}</p>'
     )
     parts.append("</div>")
 

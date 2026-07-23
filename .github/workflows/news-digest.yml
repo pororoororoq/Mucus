@@ -1,6 +1,10 @@
 name: Korean News Digest
 
 on:
+  # TEMPORARY: fire the digest (지면 newspaper + scraped broadcast) for a test.
+  push:
+    branches: [claude/korean-news-digest-naver-y7p4ch]
+    paths: ["news_digest/**", ".github/workflows/news-digest.yml"]
   schedule:
     # 22:00 UTC = 07:00 KST, every day.
     # NOTE: GitHub only runs scheduled workflows from the DEFAULT branch,
@@ -48,14 +52,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r news_digest/requirements.txt
 
-      - name: Build digest
+      - name: Build newspaper 지면 digest
         env:
           RECENCY: ${{ github.event.inputs.recency || '1d' }}
-          ENRICH: ${{ github.event.inputs.enrich || '1' }}
-          # Optional Naver Search API cross-check (safe to leave unset).
-          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
-          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
-        run: python -m news_digest.main
+        run: python -m news_digest.jimyeon
 
       - name: Build broadcast digest
         env:
@@ -90,7 +90,7 @@ jobs:
           password: ${{ env.MAIL_PASSWORD }}
           from: Korean News Digest <${{ env.MAIL_USERNAME }}>
           to: ${{ env.DIGEST_TO }}
-          subject: "📰 오늘의 한국 뉴스 다이제스트 — ${{ steps.body.outputs.date }}"
+          subject: "📰 오늘의 신문 지면 다이제스트 — ${{ steps.body.outputs.date }}"
           html_body: ${{ steps.body.outputs.html }}
           attachments: digests/latest.html
 
