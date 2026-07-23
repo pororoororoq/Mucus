@@ -1,8 +1,7 @@
-"""Probe #5: (a) full SBS/KBS rundown counts, (b) Naver 지면(front-page) discovery."""
+"""Probe #6: Naver 지면(newspaper) DOM — find 면(page) grouping structure."""
 
 from __future__ import annotations
 
-import json
 import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -11,77 +10,75 @@ import requests
 from bs4 import BeautifulSoup
 
 if __package__:
-    from . import scrape
     from .fetch import USER_AGENT
 else:  # pragma: no cover
-    import scrape  # type: ignore
     from fetch import USER_AGENT  # type: ignore
 
 KST = ZoneInfo("Asia/Seoul")
 YMD = datetime.now(KST).strftime("%Y%m%d")
 H = {"User-Agent": USER_AGENT, "Accept-Language": "ko"}
 
-
-def full_rundowns():
-    for name, fn in (("SBS 8뉴스", lambda: scrape.scrape_sbs(100)),
-                     ("KBS 뉴스9", lambda: scrape.scrape_kbs(100))):
-        print(f"\n==================== {name} (uncapped) ====================")
-        try:
-            items = fn()
-            print(f"  TOTAL parsed: {len(items)}")
-            for i, a in enumerate(items, 1):
-                sec = f"[{a.section}] " if getattr(a, "section", "") else ""
-                print(f"   {i:2d}. {sec}{a.title[:56]}")
-        except Exception as e:  # noqa: BLE001
-            print(f"  FAILED: {e!r}")
+OFFICES = {"조선": "023", "동아": "020", "중앙": "025", "한겨레": "028", "한국": "469"}
 
 
-def naver_jimyeon():
-    print("\n==================== NAVER 지면 (조선 023) ====================")
-    candidates = [
-        f"https://media.naver.com/press/023/newspaper?date={YMD}",
-        "https://media.naver.com/press/023/newspaper",
-        f"https://newspaper.naver.com/main/main.naver?officeId=023&date={YMD}",
-        f"https://apis.naver.com/newspaper/newspaper/list?officeId=023&date={YMD}",
-    ]
-    for url in candidates:
-        print(f"\n  --- {url}")
-        try:
-            r = requests.get(url, headers=H, timeout=20)
-        except Exception as e:  # noqa: BLE001
-            print(f"      ERROR: {e!r}")
-            continue
-        ct = r.headers.get("content-type", "")
-        print(f"      status={r.status_code} final={r.url[:80]} ct={ct} bytes={len(r.content)}")
-        body = r.text
-        if "json" in ct or body.lstrip()[:1] in "{[":
-            try:
-                print(f"      JSON sample: {str(json.loads(body))[:500]}")
-            except Exception:  # noqa: BLE001
-                pass
-            continue
-        soup = BeautifulSoup(body, "html.parser")
-        t = soup.find("title")
-        print(f"      <title>={t.get_text(strip=True) if t else None}")
-        # look for page(면) markers and article links in document order
-        for marker in soup.find_all(string=re.compile(r"\d+\s*면")):
-            m = marker.strip()
-            if m:
-                print(f"      면marker: {m[:30]!r}")
-        arts = []
-        for a in soup.find_all("a", href=True):
-            txt = re.sub(r"\s+", " ", a.get_text(" ", strip=True))
-            if len(txt) >= 10 and sum(1 for c in txt if "가" <= c <= "힣") > 4 \
-               and re.search(r"(article|/read|newspaper|/mnews)", a["href"], re.I):
-                arts.append((txt[:50], a["href"][:70]))
-        print(f"      article-like links: {len(arts)}")
-        for txt, href in arts[:12]:
-            print(f"        {txt!r}  <- {href}")
+def dump_structure(oid: str):
+    url = f"https://media.naver.com/press/{oid}/newspaper?date={YMD}"
+    r = requests.get(url, headers=H, timeout=20)
+    soup = BeautifulSoup(r.text, "html.parser")
+
+    # Find any element whose (own) text looks like a 면 label.
+    print("  candidate 면 labels (tag.class -> text):")
+    seen = 0
+    for el in soup.find_all(["strong", "em", "span", "h3", "h4", "b", "div"]):
+        txt = el.get_text(" ", strip=True)
+        if re.fullmatch(r"[A-Z]?\d{1,2}\s*면", txt or ""):
+            cls = ".".join(el.get("class", []))
+            print(f"    {el.name}.{cls} -> {txt!r}")
+            seen += 1
+        if seen >= 12:
+            break
+    if seen == 0:
+        print("    (none matched \\d면)")
+
+    # First newspaper article link -> print ancestor chain classes.
+    a = soup.find("a", href=re.compile(r"/article/newspaper/"))
+    if a:
+        print("\n  first article ancestor chain:")
+        node = a
+        for _ in range(6):
+            if node is None:
+                break
+            cls = ".".join(node.get("class", [])) if hasattr(node, "get") else ""
+            print(f"    <{getattr(node,'name','?')} class={cls}>")
+            node = node.parent
+        print("\n  first article container prettify (trimmed):")
+        # climb to a container that holds several article links
+        cont = a
+        for _ in range(5):
+            if cont.parent is None:
+                break
+            cont = cont.parent
+            if len(cont.find_all("a", href=re.compile(r"/article/newspaper/"))) >= 2:
+                break
+        print(re.sub(r"\n\s*\n", "\n", cont.prettify())[:1400])
 
 
 def main() -> int:
-    full_rundowns()
-    naver_jimyeon()
+    print(f"date={YMD}")
+    print("\n==================== 조선(023) structure ====================")
+    dump_structure("023")
+
+    print("\n==================== office availability ====================")
+    for name, oid in OFFICES.items():
+        try:
+            r = requests.get(f"https://media.naver.com/press/{oid}/newspaper?date={YMD}",
+                             headers=H, timeout=20)
+            soup = BeautifulSoup(r.text, "html.parser")
+            n = len(soup.find_all("a", href=re.compile(r"/article/newspaper/")))
+            t = soup.find("title")
+            print(f"  {name}({oid}): status={r.status_code} links={n} title={t.get_text(strip=True) if t else None}")
+        except Exception as e:  # noqa: BLE001
+            print(f"  {name}({oid}): ERROR {e!r}")
     return 0
 
 
