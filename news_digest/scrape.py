@@ -103,9 +103,11 @@ def scrape_kbs(limit: int = 20) -> list[Article]:
             break
         rows.extend(data)
 
+    _skip = ("오프닝", "클로징", "[스포츠9 헤드라인]")
     national = [
         d for d in rows
         if (d.get("broadName") or "") == KBS_NATIONAL
+        and (d.get("newsTitle") or "").strip() not in _skip
         and "클로징" not in (d.get("newsTitle") or "")
     ]
     national.sort(key=_kbs_order)

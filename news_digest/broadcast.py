@@ -52,7 +52,8 @@ BROADCAST_SECTIONS = {
     "국제": "국제", "문화": "문화", "스포츠": "스포츠",
 }
 MAX_PER_SECTION = 5
-MAX_PER_BROADCASTER = 22
+# Full evening rundowns run ~30+ segments; keep the cap high so nothing is dropped.
+MAX_PER_BROADCASTER = 40
 
 
 def _pub_key(article: Article) -> datetime:
