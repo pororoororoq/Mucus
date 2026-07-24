@@ -1,0 +1,92 @@
+name: Newspaper Digest (지면)
+
+on:
+  schedule:
+    # 22:30 UTC = 07:30 KST, every day. Scheduled workflows run from the
+    # DEFAULT branch, so this fires once merged into main.
+    - cron: "30 22 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Print edition to build, YYYYMMDD (blank = today)"
+        required: false
+        default: ""
+      recency:
+        description: "Recency window for the Google News fallback (e.g. 1d)"
+        required: false
+        default: "1d"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: newspaper-digest
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Add these two repo secrets to enable email; otherwise the send is skipped.
+      #   MAIL_USERNAME = sending Gmail address
+      #   MAIL_PASSWORD = Gmail App Password (16 chars, needs 2FA)
+      MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+      MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+      DIGEST_TO: kimphil9@gmail.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r news_digest/requirements.txt
+
+      - name: Build newspaper 지면 digest
+        env:
+          RECENCY: ${{ github.event.inputs.recency || '1d' }}
+          DIGEST_DATE: ${{ github.event.inputs.date || '' }}
+        run: python -m news_digest.jimyeon
+
+      - name: Prepare email body
+        id: body
+        run: |
+          {
+            echo 'html<<DIGEST_EOF'
+            cat digests/latest.html
+            echo ""
+            echo DIGEST_EOF
+          } >> "$GITHUB_OUTPUT"
+          echo "date=$(TZ=Asia/Seoul date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Send email
+        if: ${{ env.MAIL_USERNAME != '' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ env.MAIL_USERNAME }}
+          password: ${{ env.MAIL_PASSWORD }}
+          from: Korean News Digest <${{ env.MAIL_USERNAME }}>
+          to: ${{ env.DIGEST_TO }}
+          subject: "📰 오늘의 신문 지면 다이제스트 — ${{ steps.body.outputs.date }}"
+          html_body: ${{ steps.body.outputs.html }}
+          attachments: digests/latest.html
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: newspaper-digest
+          path: digests/*.html
+          if-no-files-found: warn
+
+      - name: Commit digest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add digests/
+          if git diff --staged --quiet; then
+            echo "No digest changes to commit."
+          else
+            git commit -m "chore: newspaper 지면 digest for $(TZ=Asia/Seoul date +%Y-%m-%d)"
+            git push
+          fi
