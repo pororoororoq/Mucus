@@ -51,7 +51,10 @@ EDITORIAL_ROW = "사설"
 ROWS = PAGE_ROWS + [EDITORIAL_ROW]
 
 MAX_PER_CELL = 5
-_MYEON_RE = re.compile(r"[A-Z]?(\d{1,2})\s*면")
+# Capture the section prefix so we can keep only the main section (A면 / no prefix)
+# and drop B·C·S 별지 sections (경제·스포츠 등).
+_MYEON_RE = re.compile(r"([A-Z]?)(\d{1,2})\s*면")
+_MAIN_PREFIXES = {"", "A"}
 
 
 def _get(url: str, timeout: int = 20) -> requests.Response:
@@ -74,7 +77,8 @@ def scrape_jimyeon(paper: str, oid: str, ymd: str) -> list[tuple[int, Article]]:
         if el.name == "h3":
             m = _MYEON_RE.match(el.get_text(" ", strip=True))
             if m:
-                current = int(m.group(1))
+                # Main section (A면 / no prefix) -> page number; 별지(B·C…) -> -1.
+                current = int(m.group(2)) if m.group(1) in _MAIN_PREFIXES else -1
             continue
         href = el.get("href", "")
         if "/article/newspaper/" not in href:
