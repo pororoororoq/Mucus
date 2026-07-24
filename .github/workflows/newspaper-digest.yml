@@ -1,6 +1,10 @@
 name: Newspaper Digest (지면)
 
 on:
+  # TEMPORARY: validate the B면 fix + split workflow before merge.
+  push:
+    branches: [claude/korean-news-digest-naver-y7p4ch]
+    paths: ["news_digest/jimyeon.py", ".github/workflows/newspaper-digest.yml"]
   schedule:
     # 22:30 UTC = 07:30 KST, every day. Scheduled workflows run from the
     # DEFAULT branch, so this fires once merged into main.
