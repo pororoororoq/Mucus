@@ -43,6 +43,7 @@ jobs:
       - name: Build newspaper 지면 digest
         env:
           RECENCY: ${{ github.event.inputs.recency || '1d' }}
+          DIGEST_DATE: "20260724"   # TEMP: pin to a fully-published edition for the test
         run: python -m news_digest.jimyeon
 
       - name: Prepare email body

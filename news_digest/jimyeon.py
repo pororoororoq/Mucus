@@ -218,7 +218,8 @@ def render_table(matrix, failed, now: datetime) -> str:
 
 def main() -> int:
     now = datetime.now(KST)
-    ymd = now.strftime("%Y%m%d")
+    # DIGEST_DATE=YYYYMMDD lets you (re)build a specific print edition.
+    ymd = os.environ.get("DIGEST_DATE") or now.strftime("%Y%m%d")
     matrix, failed = collect(ymd)
     page = render_table(matrix, failed, now)
 
