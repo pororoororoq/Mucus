@@ -30,29 +30,34 @@ Claude Code 웹 세션의 원격 환경은 조직 이그레스 정책으로 네�
 
 ### 1) GitHub Actions (권장)
 
-- **자동:** 매일 07:00 KST에 실행됩니다. ⚠️ GitHub는 **기본 브랜치(main)** 에 있는
-  스케줄 워크플로만 자동 실행하므로, 자동화를 켜려면 이 워크플로를 `main`에 머지하세요.
-- **수동:** 리포지토리 **Actions → Korean News Digest → Run workflow** 로 아무 브랜치에서나
-  즉시 실행할 수 있습니다. 결과는 `digests/YYYY-MM-DD.md` 에 커밋되고, 실행 요약(job summary)과
-  아티팩트로도 확인할 수 있습니다.
+두 개의 스케줄 워크플로로 나뉘어 있습니다:
+
+| 워크플로 | 실행 시각(KST) | cron(UTC) | 내용 |
+|---|---|---|---|
+| `newspaper-digest.yml` | **07:30** | `30 22 * * *` | 📰 신문 지면 표 |
+| `broadcast-digest.yml` | **22:00** | `0 13 * * *` | 📺 방송 편성 |
+
+- **자동:** 위 시각에 실행됩니다. ⚠️ GitHub는 **기본 브랜치(main)** 의 스케줄 워크플로만 자동
+  실행하므로, 켜려면 `main`에 머지하세요.
+- **수동:** **Actions → (워크플로 선택) → Run workflow** 로 즉시 실행 가능. 결과는
+  `digests/`에 커밋되고 job summary·아티팩트로도 확인됩니다.
 
 ### 2) 로컬 실행
 
 ```bash
 pip install -r news_digest/requirements.txt
-python -m news_digest.main          # 신문  → digests/YYYY-MM-DD.html, digests/latest.html
-python -m news_digest.broadcast     # 방송  → digests/broadcast-YYYY-MM-DD.html, digests/broadcast-latest.html
+python -m news_digest.jimyeon        # 신문 지면 표 → digests/YYYY-MM-DD.html, digests/latest.html
+python -m news_digest.broadcast      # 방송        → digests/broadcast-YYYY-MM-DD.html, digests/broadcast-latest.html
 ```
 
 환경 변수:
 
 | 변수 | 기본 | 설명 |
 |---|---|---|
-| `ENRICH` | `1` | `0`이면 요약 없이 헤드라인만 (더 빠름) |
 | `RECENCY` | `1d` | 수집 범위 (`2d`, `12h` 등) |
 | `OUTPUT_DIR` | `<repo>/digests` | 출력 폴더 |
 
-## 이메일 발송 (jakekim070917@gmail.com)
+## 이메일 발송 (kimphil9@gmail.com)
 
 다이제스트를 이메일로도 받으려면 GitHub 리포 **Settings → Secrets and variables → Actions** 에
 아래 2개를 추가하세요. (미설정 시 이메일 단계는 자동으로 건너뛰고, 커밋·아티팩트는 정상 동작)
@@ -63,9 +68,10 @@ python -m news_digest.broadcast     # 방송  → digests/broadcast-YYYY-MM-DD.h
 | `MAIL_PASSWORD` | Gmail **앱 비밀번호**(16자리) — 2단계 인증 필요, 일반 비번 아님 |
 
 - 앱 비밀번호 발급: Google 계정 → 보안 → 2단계 인증 → **앱 비밀번호**.
-- 수신자는 워크플로에 `DIGEST_TO: jakekim070917@gmail.com` 로 지정돼 있습니다. 바꾸려면
-  `.github/workflows/news-digest.yml` 의 `DIGEST_TO` 값을 편집하세요.
-- 발송은 `smtp.gmail.com:465`(SSL)로 이뤄지며, **HTML 본문**(다이제스트 전문) + `latest.html` 첨부가 포함됩니다.
+- 수신자는 두 워크플로에 `DIGEST_TO: kimphil9@gmail.com` 로 지정돼 있습니다. 바꾸려면
+  `.github/workflows/newspaper-digest.yml`·`broadcast-digest.yml` 의 `DIGEST_TO` 값을 편집하세요.
+- 발송은 `smtp.gmail.com:465`(SSL)로 이뤄지며, **HTML 본문**(다이제스트 전문) + HTML 첨부가 포함됩니다.
+- 신문 지면은 아침 **07:30**, 방송은 밤 **22:00**(저녁뉴스 종료 후)에 각각 발송됩니다.
 
 ## (선택) 네이버 검색 API 추가
 
@@ -93,5 +99,6 @@ news_digest/
 ├─ broadcast.py   # 방송 다이제스트 생성 (digests/broadcast-*.html)
 ├─ naver_api.py   # (선택) 네이버 검색 API 헬퍼
 └─ requirements.txt
-.github/workflows/news-digest.yml   # 매일 07:00 KST 실행 (신문+방송 모두)
+.github/workflows/newspaper-digest.yml   # 07:30 KST — 신문 지면
+.github/workflows/broadcast-digest.yml   # 22:00 KST — 방송
 ```
