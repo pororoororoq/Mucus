@@ -2,10 +2,10 @@ name: Broadcast Digest (방송)
 
 on:
   schedule:
-    # 13:00 UTC = 22:00 KST, every day (after the evening newscasts air).
-    # Scheduled workflows run from the DEFAULT branch, so this fires once
-    # merged into main.
-    - cron: "0 13 * * *"
+    # 12:00 UTC. Target 21:00 KST; GitHub's scheduler runs this repo's cron
+    # ~1h late in practice, so actual delivery lands near 22:00 KST (after the
+    # evening newscasts air). Scheduled workflows run from the DEFAULT branch.
+    - cron: "0 12 * * *"
   workflow_dispatch:
     inputs:
       recency:

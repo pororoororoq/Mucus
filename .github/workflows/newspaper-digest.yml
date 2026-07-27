@@ -2,9 +2,10 @@ name: Newspaper Digest (지면)
 
 on:
   schedule:
-    # 22:30 UTC = 07:30 KST, every day. Scheduled workflows run from the
-    # DEFAULT branch, so this fires once merged into main.
-    - cron: "30 22 * * *"
+    # 21:30 UTC. Target 06:30 KST; GitHub's scheduler runs this repo's cron
+    # ~1h late in practice, so actual delivery lands near 07:30 KST.
+    # Scheduled workflows run from the DEFAULT branch (main).
+    - cron: "30 21 * * *"
   workflow_dispatch:
     inputs:
       date:
