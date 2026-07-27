@@ -57,6 +57,19 @@ python -m news_digest.broadcast      # 방송        → digests/broadcast-YYYY-
 | `RECENCY` | `1d` | 수집 범위 (`2d`, `12h` 등) |
 | `OUTPUT_DIR` | `<repo>/digests` | 출력 폴더 |
 
+## 텔레그램 발송 (권장 · 설정 간단)
+
+이메일보다 훨씬 쉽습니다. 리포 **Settings → Secrets and variables → Actions** 에 2개만:
+
+| 시크릿 | 값 |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | 텔레그램 **@BotFather** 에서 `/newbot` 으로 만든 봇 토큰 |
+| `TELEGRAM_CHAT_ID` | 본인 숫자 chat id (**@userinfobot** 에게 말 걸면 알려줌) |
+
+- 봇에게 먼저 아무 말이나 한 번 보내야(대화 시작) 봇이 메시지를 보낼 수 있습니다.
+- 다이제스트는 **HTML 파일 첨부 + 짧은 캡션**으로 전송됩니다(탭하면 표/목록이 열림).
+- 두 시크릿이 없으면 텔레그램 단계는 자동으로 건너뜁니다. 이메일과 **병행**해도 됩니다.
+
 ## 이메일 발송 (kimphil9@gmail.com)
 
 다이제스트를 이메일로도 받으려면 GitHub 리포 **Settings → Secrets and variables → Actions** 에

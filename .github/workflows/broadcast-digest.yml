@@ -27,6 +27,8 @@ jobs:
       MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
       MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
       DIGEST_TO: kimphil9@gmail.com
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -49,6 +51,14 @@ jobs:
             echo DIGEST_EOF
           } >> "$GITHUB_OUTPUT"
           echo "date=$(TZ=Asia/Seoul date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Send Telegram
+        if: ${{ env.TELEGRAM_BOT_TOKEN != '' }}
+        run: |
+          D=$(TZ=Asia/Seoul date +%Y-%m-%d)
+          python -m news_digest.telegram_send digests/broadcast-latest.html \
+            "📺 오늘의 방송 뉴스 다이제스트 — $D (SBS·KBS·MBC·YTN 편성 순서). 첨부 HTML을 열어보세요." \
+            "방송-$D.html"
 
       - name: Send email
         if: ${{ env.MAIL_USERNAME != '' }}
