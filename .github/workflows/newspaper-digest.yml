@@ -33,6 +33,11 @@ jobs:
       MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
       MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
       DIGEST_TO: kimphil9@gmail.com
+      # Telegram delivery (easier than email): set these two repo secrets.
+      #   TELEGRAM_BOT_TOKEN = token from @BotFather
+      #   TELEGRAM_CHAT_ID   = your numeric chat id (from @userinfobot)
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -56,6 +61,14 @@ jobs:
             echo DIGEST_EOF
           } >> "$GITHUB_OUTPUT"
           echo "date=$(TZ=Asia/Seoul date +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+
+      - name: Send Telegram
+        if: ${{ env.TELEGRAM_BOT_TOKEN != '' }}
+        run: |
+          D=$(TZ=Asia/Seoul date +%Y-%m-%d)
+          python -m news_digest.telegram_send digests/latest.html \
+            "📰 오늘의 신문 지면 다이제스트 — $D (1~6면 + 사설). 첨부 HTML을 열어 표로 확인하세요." \
+            "지면-$D.html"
 
       - name: Send email
         if: ${{ env.MAIL_USERNAME != '' }}
